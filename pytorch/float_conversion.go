@@ -47,10 +47,10 @@ func initExponentTable() {
 func initOffsetTable() {
 	offsetTable[0] = 0
 	offsetTable[32] = 0
-	for i := uint32(1); i < 31; i++ {
+	for i := uint32(1); i < 32; i++ {
 		offsetTable[i] = 1024
 	}
-	for i := uint32(32); i < 64; i++ {
+	for i := uint32(33); i < 64; i++ {
 		offsetTable[i] = 1024
 	}
 }
@@ -58,7 +58,7 @@ func initOffsetTable() {
 func convertMantissa(i uint32) uint32 {
 	var m uint32 = i << 13  // zero pad mantissa bits
 	var e uint32 = 0        // zero exponent
-	for m&0x00800000 != 0 { // while not normalized
+	for m&0x00800000 == 0 { // while not normalized
 		e -= 0x00800000 // decrement exponent (1 << 23)
 		m <<= 1         // shift mantissa
 	}
