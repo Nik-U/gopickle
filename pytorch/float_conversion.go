@@ -11,14 +11,31 @@ func FloatBits16to32(u16 uint16) uint32 {
 	return mantissaTable[offsetTable[u16>>10]+(uint32(u16)&0x3ff)] + exponentTable[u16>>10]
 }
 
+// FloatBits32to16 converts the bits representation of an IEEE 754 float
+// representation (32 bits) to a half float (16 bits). It is a precise,
+// bit-for-bit inverse of FloatBits16to32 for all valid half float values.
+// Floats that cannot be represented as half floats are rounded.
+func FloatBits32to16(u32 uint32) uint16 {
+	return baseTable[(u32>>23)&0x1ff] + (uint16((u32 & 0x007fffff) >> shiftTable[(u32>>23)&0x1ff]))
+}
+
+// Tables for half -> float
+
 var mantissaTable [2048]uint32
 var exponentTable [64]uint32
 var offsetTable [64]uint32
+
+// Tables for float -> half
+
+var baseTable [512]uint16
+var shiftTable [512]uint8
 
 func init() {
 	initMantissaTable()
 	initExponentTable()
 	initOffsetTable()
+	initBaseTable()
+	initShiftTable()
 }
 
 func initMantissaTable() {
@@ -65,4 +82,50 @@ func convertMantissa(i uint32) uint32 {
 	m &= ^uint32(0x00800000) // clear leading 1 bit
 	e += 0x38800000          // adjust bias ((127-14)<<23)
 	return m | e             // return combined number
+}
+
+func initBaseTable() {
+	for i := int16(0); i < 256; i++ {
+		e := i - 127
+		switch {
+		case e < -24: // Very small numbers map to zero
+			baseTable[i|0x000] = 0x0000
+			baseTable[i|0x100] = 0x8000
+		case e < -14: // Small numbers map to denorms
+			baseTable[i|0x000] = 0x0400 >> uint16(-e-14)
+			baseTable[i|0x100] = (0x0400 >> uint16(-e-14)) | 0x8000
+		case e <= 15: // Normal numbers just lose precision
+			baseTable[i|0x000] = uint16((e + 15) << 10)
+			baseTable[i|0x100] = uint16((e+15)<<10) | 0x8000
+		case e < 128: // Large numbers map to Infinity
+			baseTable[i|0x000] = 0x7c00
+			baseTable[i|0x100] = 0xfc00
+		default: // Infinity and NaN's stay Infinity and NaN's
+			baseTable[i|0x000] = 0x7c00
+			baseTable[i|0x100] = 0xfc00
+		}
+	}
+}
+
+func initShiftTable() {
+	for i := int16(0); i < 256; i++ {
+		e := i - 127
+		switch {
+		case e < -24:
+			shiftTable[i|0x000] = 24
+			shiftTable[i|0x100] = 24
+		case e < -14:
+			shiftTable[i|0x000] = uint8(-e) - 1
+			shiftTable[i|0x100] = uint8(-e) - 1
+		case e <= 15:
+			shiftTable[i|0x000] = 13
+			shiftTable[i|0x100] = 13
+		case e < 128:
+			shiftTable[i|0x000] = 24
+			shiftTable[i|0x100] = 24
+		default:
+			shiftTable[i|0x000] = 13
+			shiftTable[i|0x100] = 13
+		}
+	}
 }
